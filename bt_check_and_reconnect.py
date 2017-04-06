@@ -49,7 +49,7 @@ class ReloginHelper:
     def login_if_necessary(self):
         # TODO sanity check that we are connected to BT wifi?
         if self._check_connected():
-            self.logger.info("Connected.. no action needed")
+            self.logger.debug("Connected.. no action needed")
             return
 
         self.logger.info("Not connected.. launching webdriver to log in")

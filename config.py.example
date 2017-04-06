@@ -1,0 +1,7 @@
+# copy this file to config.py
+# do not commit config.py to VCS
+
+# you can get phantomJS here: http://phantomjs.org/download.html
+PHANTOMJS_BIN = "/your-path/to/phantomjs/bin/phantomjs"
+USERNAME = "your_BT_username"
+PASSWORD = "your_BT_password"

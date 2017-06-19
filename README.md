@@ -2,6 +2,11 @@ BT Wifi logs me out for no apparent reason several times a day.. so I wrote a cr
 
 If it detects a lack of internet connectivity, it runs a virtual browser (phantom JS) and logs you in.
 
+# Setup
+Recursive clone is important since I am using submodule!
+
+    git clone --recursive git@github.com:karlicoss/bt-wifi-reconnect.git
+
 # Running
 
     cp config.py.example config.py

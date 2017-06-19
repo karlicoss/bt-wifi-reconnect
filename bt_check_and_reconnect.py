@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import logging
-
-from selenium import webdriver
-from selenium.webdriver.remote.webdriver import WebDriver
+from selenium import webdriver # type: ignore
+from selenium.webdriver.remote.webdriver import WebDriver # type: ignore
 
 import config
+
+from kython import *
 
 _LOGGER_TAG = 'BTReloginHelper'
 
@@ -13,7 +13,6 @@ _LOGGER_TAG = 'BTReloginHelper'
 class ReloginHelper:
     def __init__(self, username: str, password: str) -> None:
         self.logger = logging.getLogger(_LOGGER_TAG)
-        self.logger.setLevel(logging.DEBUG)
         self.config = config
         self.username = username
         self.password = password
@@ -63,13 +62,7 @@ class ReloginHelper:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    try:
-        import coloredlogs
-        coloredlogs.install(fmt="%(asctime)s [%(name)s] %(levelname)s %(message)s")
-        coloredlogs.set_level(logging.INFO)
-    except ImportError:
-        logging.info("Try coloredlogs for fancy loggging!")
+    setup_logging()
 
     helper = ReloginHelper(config.USERNAME, config.PASSWORD)
     helper.login_if_necessary()

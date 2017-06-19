@@ -16,5 +16,5 @@ If it detects a lack of internet connectivity, it runs a virtual browser (phanto
 Easy peasy!
 
 # Prerequisites
-* `selenium` (for interaction with BT wifi login page)
+* `pip3 install -r requirements.txt`
 * `phantomjs` (see `config.py.example` for more details)

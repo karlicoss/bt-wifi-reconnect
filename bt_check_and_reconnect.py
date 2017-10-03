@@ -2,6 +2,8 @@
 
 from selenium import webdriver # type: ignore
 from selenium.webdriver.remote.webdriver import WebDriver # type: ignore
+from selenium.webdriver import Chrome, Firefox, PhantomJS # type: ignore
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # type: ignore
 
 import config
 
@@ -52,7 +54,13 @@ class ReloginHelper:
             return
 
         self.logger.info("Not connected.. launching webdriver to log in")
-        driver = webdriver.PhantomJS(executable_path=self.config.PHANTOMJS_BIN)
+
+        driver = webdriver.PhantomJS(
+            executable_path=self.config.PHANTOMJS_BIN,
+            # sometimes returns empty page...
+            # see https://stackoverflow.com/a/36159299/706389
+            service_args=['--ignore-ssl-errors=true', '--ssl-protocol=TLSv1']
+        )
         try:
             driver.maximize_window()
             self._login(driver)

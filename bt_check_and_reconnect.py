@@ -1,9 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 
 from selenium import webdriver # type: ignore
 from selenium.webdriver.remote.webdriver import WebDriver # type: ignore
 from selenium.webdriver import Chrome, Firefox, PhantomJS # type: ignore
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # type: ignore
+
+from subprocess import check_call
 
 import config
 
@@ -21,6 +23,7 @@ class ReloginHelper:
 
     def _login(self, driver: WebDriver):
         driver.get("https://www.btopenzone.com:8443/home")  # trigger login
+        # TODO huh, on VPN it shows 'you may have lost connection'. weird.
 
         # select 'BT Wi-fi
         driver.find_element_by_id("provider2").click()
@@ -67,6 +70,25 @@ class ReloginHelper:
             self.logger.info("Logged in via PhantomJS")
         finally:
             driver.quit()
+
+    def reconnect_wifi(self):
+        btwifi = "BTWifi-with-FON"
+        name = get_wifi_name()
+        if name != btwifi:
+            self.logger.warning(f"Current network is {name}, will not attempt reconnecting!")
+            return
+
+        self.logger.info(f"Disabling connection...")
+        check_call(["nmcli", "con", "down", btwifi])
+        self.logger.info(f"sleeping...")
+        import time
+        time.sleep(5)
+        self.logger.info(f"Enabling connection...")
+        check_call(["nmcli", "con", "up", btwifi])
+
+    def fix_wifi(self):
+        self.login_if_necessary()
+        # TODO determine when is it necessary to reconnect
 
 
 def main():

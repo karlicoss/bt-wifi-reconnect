@@ -4,12 +4,16 @@ from selenium import webdriver # type: ignore
 from selenium.webdriver.remote.webdriver import WebDriver # type: ignore
 from selenium.webdriver import Chrome, Firefox, PhantomJS # type: ignore
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # type: ignore
+from selenium.common.exceptions import TimeoutException # type: ignore
 
 from subprocess import check_call
 
 import config
 
 from kython import *
+
+import urllib.request
+from urllib.error import URLError
 
 _LOGGER_TAG = 'BTReloginHelper'
 
@@ -21,9 +25,22 @@ class ReloginHelper:
         self.username = username
         self.password = password
 
-    def _login(self, driver: WebDriver):
-        driver.get("https://www.btopenzone.com:8443/home")  # trigger login
-        # TODO huh, on VPN it shows 'you may have lost connection'. weird.
+    def _login(self, driver: WebDriver) -> bool:
+        # https://stackoverflow.com/a/27417860/706389
+        BT_TIMEOUT = 30 # seconds
+        driver.implicitly_wait(BT_TIMEOUT)
+        driver.set_page_load_timeout(BT_TIMEOUT)
+        try:
+            BT_PAGE = "https://www.btopenzone.com:8443/home"
+            driver.get(BT_PAGE)
+            # TODO huh, on VPN it shows 'you may have lost connection'. weird.
+        except TimeoutException as e:
+            self.logger.warning("Timeout while loading BT reconnect page...")
+            return False
+
+        if "You’re now logged in to BT Wi-fi" in driver.page_source:
+            self.logger.warning("Already logged... weird, doing nothing")
+            return True
 
         # select 'BT Wi-fi
         driver.find_element_by_id("provider2").click()
@@ -35,29 +52,27 @@ class ReloginHelper:
         login_form.find_element_by_id("username").send_keys(self.username)
         login_form.find_element_by_id("password").send_keys(self.password)
         login_form.find_element_by_id("loginbtn").click()
+        return True
 
     def _check_connected(self) -> bool:
         # testing for internet connection is hard..
         # ideally you should just ping, but on BT DNS works once you are connected, you don't have to log in
         # so we load a small http page and check its content to see if we have access to Internet
         try:
-            import urllib.request
-            TIMEOUT_SECONDS = 3
-            url = urllib.request.urlopen("https://httpbin.org/get?hasinternet=True", None, TIMEOUT_SECONDS)
+            TIMEOUT_SECONDS = 5
+            TEST_URL = "https://httpbin.org/get?hasinternet=True"
+            # TEST_URL = "http://www.google.com:81" # test page
+            url = urllib.request.urlopen(TEST_URL, None, TIMEOUT_SECONDS)
             data = str(url.read(), 'utf-8')
             return "hasinternet" in data
-        except Exception:  # too broad exception type.. but whatever, what could go wrong here
-            self.logger.exception("Exception while trying to load test page")
-            return False
+        except URLError as e:
+            if 'timed out' in str(e.reason):
+                self.logger.info("Timeout while retreiving test page...")
+                return False
+            else:
+                raise e
 
-    def login_if_necessary(self):
-        # TODO sanity check that we are connected to BT wifi?
-        if self._check_connected():
-            self.logger.debug("Connected.. no action needed")
-            return
-
-        self.logger.info("Not connected.. launching webdriver to log in")
-
+    def _try_login_once(self) -> bool:
         driver = webdriver.PhantomJS(
             executable_path=self.config.PHANTOMJS_BIN,
             # sometimes returns empty page...
@@ -66,11 +81,27 @@ class ReloginHelper:
         )
         try:
             driver.maximize_window()
-            self._login(driver)
+            res = self._login(driver)
             self.logger.info("Logged in via PhantomJS")
+            return res
         finally:
             driver.quit()
 
+    def try_login(self, max_attempts=5) -> bool:
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+            if self._check_connected():
+                self.logger.debug("Connected.. no action needed")
+                return True
+
+            self.logger.info(f"Not connected, trying to login with webdriver, attempt {attempt}")
+            self._try_login_once() # TODO we might want to check return code here...
+        return False
+
+    """
+       Somethimes it just gets stuck and even wifi login page is not responding... in this case reconnecting wifi is to the rescue.
+    """
     def reconnect_wifi(self):
         btwifi = "BTWifi-with-FON"
         name = get_wifi_name()
@@ -85,17 +116,26 @@ class ReloginHelper:
         time.sleep(5)
         self.logger.info(f"Enabling connection...")
         check_call(["nmcli", "con", "up", btwifi])
+        # TODO sanity check that we are connected to BT wifi?
 
-    def fix_wifi(self):
-        self.login_if_necessary()
-        # TODO determine when is it necessary to reconnect
+    def fix_wifi_if_necessary(self):
+        MAX_ATTEMPTS = 5
+        attempt = 0
+        while attempt < MAX_ATTEMPTS:
+            attempt += 1
+            logged = self.try_login()
+            if logged:
+                return
+            self.logger.warning(f"Could not log in via webdriver, attempt {attempt} to reconnect to wifi")
+            self.reconnect_wifi()
+        self.logger.error("Could not recconnect. Sorry :(")
 
 
 def main():
     setup_logging()
 
     helper = ReloginHelper(config.USERNAME, config.PASSWORD)
-    helper.login_if_necessary()
+    helper.fix_wifi_if_necessary()
 
 
 if __name__ == '__main__':

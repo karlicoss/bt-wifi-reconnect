@@ -14,6 +14,7 @@ from kython import *
 
 import urllib.request
 from urllib.error import URLError
+from ssl import CertificateError
 
 _LOGGER_TAG = 'BTReloginHelper'
 
@@ -37,6 +38,9 @@ class ReloginHelper:
         except TimeoutException as e:
             self.logger.warning("Timeout while loading BT reconnect page...")
             return False
+        except CertificateError as e:
+            self.logger.warning("Certificate error...")
+            return False
 
         if "You’re now logged in to BT Wi-fi" in driver.page_source:
             self.logger.warning("Already logged... weird, doing nothing")
@@ -59,6 +63,7 @@ class ReloginHelper:
         # ideally you should just ping, but on BT DNS works once you are connected, you don't have to log in
         # so we load a small http page and check its content to see if we have access to Internet
         try:
+            # TODO FIXME huh, httpbin doesn't always work..
             TIMEOUT_SECONDS = 5
             TEST_URL = "https://httpbin.org/get?hasinternet=True"
             # TEST_URL = "http://www.google.com:81" # test page

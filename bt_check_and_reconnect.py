@@ -6,7 +6,7 @@ from selenium.webdriver import Chrome, Firefox, PhantomJS # type: ignore
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # type: ignore
 from selenium.common.exceptions import TimeoutException, NoSuchElementException # type: ignore
 
-from subprocess import check_call
+from subprocess import check_call, CalledProcessError
 
 import config
 
@@ -123,12 +123,17 @@ class ReloginHelper:
     def reconnect_wifi(self):
         btwifi = "BTWifi-with-FON"
         name = get_wifi_name()
-        if name != btwifi:
+        if not config.FORCE_RECONNECT and name != btwifi:
             self.logger.warning(f"Current network is {name}, will not attempt reconnecting!")
             return
 
         self.logger.info(f"Disabling connection...")
-        check_call(["nmcli", "con", "down", btwifi])
+        try:
+            check_call(["nmcli", "con", "down", btwifi])
+        except CalledProcessError as e:
+            self.logger.warning("Error while disabling connection...")
+            self.logger.exception(e)
+            self.logger.warning("Still will try to reconnect..")
         self.logger.info(f"sleeping...")
         import time
         time.sleep(5)

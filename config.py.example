@@ -3,5 +3,10 @@
 
 # you can get phantomJS here: http://phantomjs.org/download.html
 PHANTOMJS_BIN = "/your-path/to/phantomjs/bin/phantomjs"
+
 USERNAME = "your_BT_username"
+
 PASSWORD = "your_BT_password"
+
+# set to True if you want to force connect to bt wifi with fon even if you were disconnected
+FORCE_RECONNECT = False

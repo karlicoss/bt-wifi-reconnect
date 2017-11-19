@@ -4,7 +4,7 @@ from selenium import webdriver # type: ignore
 from selenium.webdriver.remote.webdriver import WebDriver # type: ignore
 from selenium.webdriver import Chrome, Firefox, PhantomJS # type: ignore
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # type: ignore
-from selenium.common.exceptions import TimeoutException # type: ignore
+from selenium.common.exceptions import TimeoutException, NoSuchElementException # type: ignore
 
 from subprocess import check_call
 
@@ -28,23 +28,21 @@ class ReloginHelper:
 
     def _login(self, driver: WebDriver) -> bool:
         # https://stackoverflow.com/a/27417860/706389
-        BT_TIMEOUT = 30 # seconds
+        BT_TIMEOUT = 5 # seconds
         driver.implicitly_wait(BT_TIMEOUT)
         driver.set_page_load_timeout(BT_TIMEOUT)
-        try:
-            BT_PAGE = "https://www.btopenzone.com:8443/home"
-            driver.get(BT_PAGE)
-            # TODO huh, on VPN it shows 'you may have lost connection'. weird.
-        except TimeoutException as e:
-            self.logger.warning("Timeout while loading BT reconnect page...")
-            return False
-        except CertificateError as e:
-            self.logger.warning("Certificate error...")
-            return False
+        BT_PAGE = "https://www.btopenzone.com:8443/home"
+        driver.get(BT_PAGE)
+        # TODO huh, on VPN it shows 'you may have lost connection'. weird.
 
         if "You’re now logged in to BT Wi-fi" in driver.page_source:
             self.logger.warning("Already logged... weird, doing nothing")
             return True
+
+        # this is the weird bug 'wifi access has expired'
+        if len(driver.find_elements_by_link_text("Buy more time")) > 0:
+            driver.find_element_by_link_text("Logout").click()
+            # TODO how to wait?
 
         # select 'BT Wi-fi
         driver.find_element_by_id("provider2").click()
@@ -63,13 +61,16 @@ class ReloginHelper:
         # ideally you should just ping, but on BT DNS works once you are connected, you don't have to log in
         # so we load a small http page and check its content to see if we have access to Internet
         try:
-            # TODO FIXME huh, httpbin doesn't always work..
+            # TODO FIXME huh, httpbin doesn't always work.. 'name or service not available' exception. or is it bt wifi being stupid?
             TIMEOUT_SECONDS = 5
             TEST_URL = "https://httpbin.org/get?hasinternet=True"
             # TEST_URL = "http://www.google.com:81" # test page
             url = urllib.request.urlopen(TEST_URL, None, TIMEOUT_SECONDS)
             data = str(url.read(), 'utf-8')
             return "hasinternet" in data
+        except CertificateError as e:
+            self.logger.warning("Certificate error while retreiving test page...")
+            return False
         except URLError as e:
             if 'timed out' in str(e.reason):
                 self.logger.info("Timeout while retreiving test page...")
@@ -86,9 +87,19 @@ class ReloginHelper:
         )
         try:
             driver.maximize_window()
-            res = self._login(driver)
-            self.logger.info("Logged in via PhantomJS")
-            return res
+            try:
+                res = self._login(driver)
+                if res:
+                    self.logger.info("Logged in via PhantomJS")
+                else:
+                    self.logger.warning("Failed to log in via PhantomJS")
+                return res
+            except TimeoutException as e:
+                self.logger.warning("Timeout while interacting with page...")
+                return False
+            except CertificateError as e:
+                self.logger.warning("Certificate error while interacting with page...")
+                return False
         finally:
             driver.quit()
 
@@ -101,7 +112,9 @@ class ReloginHelper:
                 return True
 
             self.logger.info(f"Not connected, trying to login with webdriver, attempt {attempt}")
-            self._try_login_once() # TODO we might want to check return code here...
+            res = self._try_login_once()
+            if res:
+                return True
         return False
 
     """
@@ -128,7 +141,21 @@ class ReloginHelper:
         attempt = 0
         while attempt < MAX_ATTEMPTS:
             attempt += 1
-            logged = self.try_login()
+            logged: bool
+            try:
+                self.logger.debug("Trying to connect via PhantomJS..")
+                logged = self.try_login()
+            except URLError as e:
+                if 'Name or service not known' in str(e):
+                    # usually means we have to reset wifi connection...
+                    self.logger.exception(e)
+                    logged = False
+                else:
+                    raise e
+            except NoSuchElementException as e:
+                # TODO this is usually 'your wifi access has expired page', might be a good idea to click log out?
+                self.logger.exception(e)
+                logged = False
             if logged:
                 return
             self.logger.warning(f"Could not log in via webdriver, attempt {attempt} to reconnect to wifi")

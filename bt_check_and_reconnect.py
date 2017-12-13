@@ -15,6 +15,7 @@ from kython import *
 import urllib.request
 from urllib.error import URLError
 from ssl import CertificateError
+import socket
 
 _LOGGER_TAG = 'BTReloginHelper'
 
@@ -77,6 +78,9 @@ class ReloginHelper:
                 return False
             else:
                 raise e
+        except socket.timeout as e:
+            self.logger.info("Timeout while retreiving test page...")
+            return False
 
     def _try_login_once(self) -> bool:
         driver = webdriver.PhantomJS(
@@ -146,7 +150,7 @@ class ReloginHelper:
         attempt = 0
         while attempt < MAX_ATTEMPTS:
             attempt += 1
-            logged: bool
+            logged: bool = False
             try:
                 self.logger.debug("Trying to connect via PhantomJS..")
                 logged = self.try_login()
@@ -155,12 +159,14 @@ class ReloginHelper:
                     # usually means we have to reset wifi connection...
                     self.logger.exception(e)
                     logged = False
+                elif 'Connection refused' in str(e):
+                    # weird thing... probably have to reconnect to wifi as well..
+                    self.logger.exception(e)
                 else:
                     raise e
             except NoSuchElementException as e:
                 # TODO this is usually 'your wifi access has expired page', might be a good idea to click log out?
                 self.logger.exception(e)
-                logged = False
             if logged:
                 return
             self.logger.warning(f"Could not log in via webdriver, attempt {attempt} to reconnect to wifi")

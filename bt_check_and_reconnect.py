@@ -126,7 +126,10 @@ class ReloginHelper:
     """
     def reconnect_wifi(self):
         btwifi = "BTWifi-with-FON"
-        name = get_wifi_name()
+        networks = get_networks()
+        if len(networks) != 1:
+            self.logger.warning(f"Current networks: {networks}, will not attempt reconnecting")
+        [name] = networks
         if not config.FORCE_RECONNECT and name != btwifi:
             self.logger.warning(f"Current network is {name}, will not attempt reconnecting!")
             return
